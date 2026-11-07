@@ -27,7 +27,7 @@ installs it, and relaunches the app.
 
 ```toml
 [dependencies]
-ship-shape = "0.5.0"
+ship-shape = "0.6.0"
 ```
 
 ```rust
@@ -154,6 +154,13 @@ On the next automatic update, stages older than 24 hours are swept only when the
 same bundle and user and neither the host nor helper process is alive. Unregistered stages,
 symlinks, and stages containing `old.app` recovery backups are preserved. This avoids deleting
 another app's staging area, an active update, or the only recoverable copy after a failed swap.
+
+## Upgrading from 0.5
+
+- ship-shape now uses patois 0.3 and wx-utils 0.5. Move your app to patois 0.3 too, or Cargo
+  builds two copies of patois and the update dialogs stay in English.
+- A pre-release build is now offered newer pre-releases too, such as `1.1.0-beta.2` after
+  `1.1.0-beta.1`, and build metadata in a version is ignored. See [Stable channel](#stable-channel).
 
 ## Upgrading from 0.4
 

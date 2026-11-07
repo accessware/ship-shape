@@ -1,6 +1,6 @@
 [package]
 name = "ship-shape"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 description = "Universal auto-updater for wxDragon desktop apps"
 license = "MIT"
@@ -20,7 +20,7 @@ patois = "0.3.0"
 pulldown-cmark = { version = "0.13.6", default-features = false }
 serde = { version = "1.0.229", default-features = false, features = ["derive"] }
 ureq = { version = "3.5.1", default-features = false, features = ["json", "rustls"] }
-wx-utils = "0.4.5"
+wx-utils = "0.5.0"
 wxdragon = { version = "0.9.24", default-features = false }
 
 [target.'cfg(target_os = "macos")'.dependencies]
