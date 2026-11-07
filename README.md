@@ -168,7 +168,7 @@ Each platform's asset names, download folder, and install flow live in one file 
 `src/platform/`. To add a platform, add a file there and select it in `src/platform.rs`.
 
 The download window comes from the `progress` module of
-[wx-utils](https://github.com/trypsynth/wx-utils). Its gauge stays below 100 until verification
+[wx-utils](https://github.com/accessware/wx-utils). Its gauge stays below 100 until verification
 and preparation finish. Native progress updates can yield to the event loop, so completion waits
 for the active Update/Pulse call to return before destroying the dialog or calling the shutdown
 handler. wx-utils' regression tests cover this ordering without requiring a graphical session.
