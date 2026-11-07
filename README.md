@@ -86,8 +86,13 @@ AppImage, whose `APPIMAGE` variable says which file to replace.
 
 `UpdateChannel::Stable` compares `current_version` against the tag of the repository's latest
 release, which GitHub never picks from drafts or pre-releases. Tags are semver, with or without a
-leading `v`. A pre-release build such as `1.1.0-beta.1` is offered `1.1.0` once it is out. The
-update dialog shows the release's notes, converted from Markdown to plain text.
+leading `v`, compared by semver precedence, so build metadata such as `+5.g6fd465c` is ignored.
+
+A pre-release build such as `1.1.0-beta.1` checks every release instead, pre-releases included,
+and is offered the newest: `1.1.0-beta.2`, then `1.1.0` once it is out. Tags that aren't versions,
+such as the dev channel's `latest`, are skipped. A release build is only offered releases.
+
+The update dialog shows the release's notes, converted from Markdown to plain text.
 
 ### Dev channel
 

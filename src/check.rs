@@ -3,7 +3,7 @@ use patois::t;
 use crate::{
 	UpdateError, UpdaterConfig,
 	github::{self, AssetPair, GithubRelease},
-	version::parse_semver,
+	version::{Version, parse_semver},
 };
 
 const SHORT_HASH_LEN: usize = 7;
@@ -60,14 +60,30 @@ pub fn check_for_updates(config: &UpdaterConfig, channel: UpdateChannel) -> Resu
 fn check_stable(config: &UpdaterConfig) -> Result<UpdateCheckOutcome, UpdateError> {
 	let current = parse_semver(&config.current_version)
 		.ok_or_else(|| UpdateError::InvalidVersion(t("Current version is not a valid semver.")))?;
-	let release = github::fetch_latest_release(config)?;
-	let latest = parse_semver(&release.tag_name)
-		.ok_or_else(|| UpdateError::InvalidResponse(t("Latest release tag is not a valid semver.")))?;
+	// Someone on a pre-release wants the next one too, which GitHub's latest release never is.
+	let (release, latest) = if current.is_pre_release() {
+		newest_release(github::fetch_releases(config)?)
+			.ok_or_else(|| UpdateError::InvalidResponse(t("No release has a valid semver tag.")))?
+	} else {
+		let release = github::fetch_latest_release(config)?;
+		let latest = parse_semver(&release.tag_name)
+			.ok_or_else(|| UpdateError::InvalidResponse(t("Latest release tag is not a valid semver.")))?;
+		(release, latest)
+	};
 	if current >= latest {
 		return Ok(UpdateCheckOutcome::UpToDate(release.tag_name));
 	}
 	let notes = release.body.clone().unwrap_or_default();
 	update_available(config, &release, release.tag_name.clone(), notes)
+}
+
+/// Tags that aren't versions, such as the dev channel's rolling `latest`, are skipped.
+fn newest_release(releases: Vec<GithubRelease>) -> Option<(GithubRelease, Version)> {
+	releases
+		.into_iter()
+		.filter(|release| !release.draft)
+		.filter_map(|release| parse_semver(&release.tag_name).map(|version| (release, version)))
+		.max_by(|(_, a), (_, b)| a.cmp(b))
 }
 
 fn check_dev(config: &UpdaterConfig) -> Result<UpdateCheckOutcome, UpdateError> {
@@ -110,4 +126,29 @@ fn update_available(
 		signature_url,
 		release_notes,
 	}))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn newest(tags: &[(&str, bool)]) -> Option<String> {
+		newest_release(tags.iter().map(|(tag, draft)| GithubRelease::for_test(tag, *draft)).collect())
+			.map(|(release, _)| release.tag_name)
+	}
+
+	/// What someone on `1.0.0-alpha.1` is offered: the next alpha, then the release, never a draft or the dev channel's tag.
+	#[test]
+	fn the_newest_release_is_picked_by_precedence() {
+		assert_eq!(
+			newest(&[("latest", false), ("v1.0.0-alpha.2", false), ("v1.0.0-alpha.1", false)]).as_deref(),
+			Some("v1.0.0-alpha.2")
+		);
+		assert_eq!(
+			newest(&[("v1.0.0-rc.1", false), ("v1.0.0", false), ("v1.0.0-beta.11", false)]).as_deref(),
+			Some("v1.0.0")
+		);
+		assert_eq!(newest(&[("v1.0.0", true), ("v1.0.0-alpha.2", false)]).as_deref(), Some("v1.0.0-alpha.2"));
+		assert_eq!(newest(&[("latest", false)]), None);
+	}
 }

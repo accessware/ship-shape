@@ -18,7 +18,16 @@ pub struct GithubRelease {
 	pub tag_name: String,
 	pub body: Option<String>,
 	#[serde(default)]
+	pub draft: bool,
+	#[serde(default)]
 	assets: Vec<ReleaseAsset>,
+}
+
+#[cfg(test)]
+impl GithubRelease {
+	pub fn for_test(tag_name: &str, draft: bool) -> Self {
+		Self { tag_name: tag_name.to_owned(), body: None, draft, assets: Vec::new() }
+	}
 }
 
 /// URLs of a release asset and its minisign signature.
@@ -29,6 +38,18 @@ pub struct AssetPair {
 
 pub fn fetch_latest_release(config: &UpdaterConfig) -> Result<GithubRelease, UpdateError> {
 	fetch_release(config, &format!("https://api.github.com/repos/{}/releases/latest", config.github_repo))
+}
+
+/// The most recent releases, pre-releases included, which `/releases/latest` leaves out.
+pub fn fetch_releases(config: &UpdaterConfig) -> Result<Vec<GithubRelease>, UpdateError> {
+	http::agent(API_TIMEOUT)
+		.get(&format!("https://api.github.com/repos/{}/releases?per_page=100", config.github_repo))
+		.header("User-Agent", &config.user_agent)
+		.header("Accept", "application/vnd.github+json")
+		.call()?
+		.body_mut()
+		.read_json::<Vec<GithubRelease>>()
+		.map_err(|e| UpdateError::InvalidResponse(format!("{}: {e}", t("Failed to parse release JSON"))))
 }
 
 pub fn fetch_release_by_tag(config: &UpdaterConfig, tag: &str) -> Result<GithubRelease, UpdateError> {
