@@ -158,17 +158,14 @@ pub fn run_update_check_with_exit_handler(
 	let parent = ParentWindow::new(parent);
 	thread::spawn(move || {
 		let outcome = check_for_updates(&config, channel);
-		wxdragon::call_after(Box::new(move || match outcome {
+		wx_utils::post_to_ui(move || match outcome {
 			Ok(UpdateCheckOutcome::UpdateAvailable(result)) => offer_update(config, check, parent, result, on_exit),
 			Ok(UpdateCheckOutcome::UpToDate(version)) if trigger == CheckTrigger::Manual => {
 				show_up_to_date(parent, &version);
 			}
 			Err(e) if trigger == CheckTrigger::Manual => show_error(parent, &e),
 			Ok(UpdateCheckOutcome::UpToDate(_)) | Err(_) => {}
-		}));
-		// call_after only enqueues; an otherwise idle event loop may not drain
-		// the queue until the next natural message.
-		wxdragon::wake_up_idle();
+		});
 	});
 }
 
