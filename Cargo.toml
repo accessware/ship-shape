@@ -16,11 +16,11 @@ translatable = true
 [dependencies]
 homeport = "0.1.0"
 minisign-verify = "0.3.0"
-patois = "0.3.0"
+patois = "0.3.2"
 pulldown-cmark = { version = "0.13.6", default-features = false }
 serde = { version = "1.0.229", default-features = false, features = ["derive"] }
 ureq = { version = "3.5.1", default-features = false, features = ["json", "rustls"] }
-wx-utils = "0.5.0"
+wx-utils = "0.5.1"
 wxdragon = { version = "0.9.24", default-features = false }
 
 [target.'cfg(target_os = "macos")'.dependencies]
