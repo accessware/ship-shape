@@ -10,7 +10,7 @@ use std::{
 };
 
 use patois::t;
-use wx_utils::progress::{Ended, Progress, run_with_progress};
+use wx_utils::progress::{Ended, Progress, run_without_estimate};
 use wxdragon::{ffi, prelude::*, window::WxWidget};
 
 pub use self::markdown::markdown_to_text;
@@ -215,7 +215,7 @@ fn start_download(
 	let work = move |progress: &Progress| fetch(&config, &result, progress);
 	#[cfg(target_os = "macos")]
 	let work = move |progress: &Progress| prepare(&config, fetch(&config, &result, progress), progress);
-	run_with_progress(&parent, &title, &t("Downloading update..."), work, move |download, ended| {
+	run_without_estimate(&parent, &title, &t("Downloading update..."), work, move |download, ended| {
 		if ended == Ended::Completed {
 			#[cfg(not(target_os = "macos"))]
 			let download = download.map(|path| platform::install(&install_config, &path));
