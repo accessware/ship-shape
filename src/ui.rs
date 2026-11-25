@@ -153,11 +153,20 @@ pub fn run_update_check_with_exit_handler(
 ) {
 	let on_exit: Box<dyn FnOnce() + Send> = Box::new(on_exit);
 	let Some(check) = ActiveCheck::acquire() else {
+		tracing::info!(?trigger, "update check skipped, since another is still running");
 		return;
 	};
+	tracing::info!(?channel, ?trigger, "checking for updates");
 	let parent = ParentWindow::new(parent);
 	thread::spawn(move || {
 		let outcome = check_for_updates(&config, channel);
+		match &outcome {
+			Ok(UpdateCheckOutcome::UpdateAvailable(result)) => {
+				tracing::info!(version = %result.latest_version, "update available");
+			}
+			Ok(UpdateCheckOutcome::UpToDate(version)) => tracing::info!(%version, "up to date"),
+			Err(e) => tracing::warn!(error = %e, "update check failed"),
+		}
 		wx_utils::post_to_ui(move || match outcome {
 			Ok(UpdateCheckOutcome::UpdateAvailable(result)) => offer_update(config, check, parent, result, on_exit),
 			Ok(UpdateCheckOutcome::UpToDate(version)) if trigger == CheckTrigger::Manual => {
@@ -196,7 +205,9 @@ fn offer_update(
 ) {
 	let plain_notes = markdown_to_text(&result.release_notes);
 	let release_notes = if plain_notes.is_empty() { t("No release notes provided.") } else { plain_notes };
-	if show_update_dialog(&parent, &result.latest_version, &release_notes, &config.app_display_name) {
+	let accepted = show_update_dialog(&parent, &result.latest_version, &release_notes, &config.app_display_name);
+	tracing::info!(accepted, "update offered");
+	if accepted {
 		start_download(config, check, parent, result, on_exit);
 	}
 }
@@ -216,6 +227,7 @@ fn start_download(
 	#[cfg(target_os = "macos")]
 	let work = move |progress: &Progress| prepare(&config, fetch(&config, &result, progress), progress);
 	run_without_estimate(&parent, &title, &t("Downloading update..."), work, move |download, ended| {
+		tracing::info!(?ended, ok = download.is_ok(), "update download window closed");
 		if ended == Ended::Completed {
 			#[cfg(not(target_os = "macos"))]
 			let download = download.map(|path| platform::install(&install_config, &path));
@@ -263,7 +275,10 @@ fn prepare(
 
 fn install_update(parent: ParentWindow, outcome: Result<InstallOutcome, String>, on_exit: Box<dyn FnOnce() + Send>) {
 	match outcome {
-		Ok(InstallOutcome::Exit) => quit_for_install(on_exit),
+		Ok(InstallOutcome::Exit) => {
+			tracing::info!("update ready, quitting for it");
+			quit_for_install(on_exit);
+		}
 		#[cfg(target_os = "macos")]
 		Ok(InstallOutcome::Prepared(update)) => match update.commit() {
 			Ok(()) => quit_for_install(on_exit),
@@ -272,7 +287,10 @@ fn install_update(parent: ParentWindow, outcome: Result<InstallOutcome, String>,
 		Ok(InstallOutcome::ManualStep(msg)) => {
 			show_message(parent, &msg, &t("Update Ready"), MessageDialogStyle::IconInformation);
 		}
-		Err(msg) => show_message(parent, &msg, &t("Error"), MessageDialogStyle::IconError),
+		Err(msg) => {
+			tracing::warn!(error = %msg, "update could not be installed");
+			show_message(parent, &msg, &t("Error"), MessageDialogStyle::IconError);
+		}
 	}
 }
 
@@ -280,6 +298,7 @@ fn install_update(parent: ParentWindow, outcome: Result<InstallOutcome, String>,
 fn quit_for_install(on_exit: Box<dyn FnOnce() + Send>) {
 	thread::spawn(|| {
 		thread::sleep(EXIT_WATCHDOG);
+		tracing::warn!("the app did not quit for the update in time, so ship-shape ends it");
 		process::exit(0);
 	});
 	on_exit();
@@ -308,6 +327,7 @@ fn show_up_to_date(parent: ParentWindow, version: &str) {
 }
 
 fn show_error(parent: ParentWindow, err: &UpdateError) {
+	tracing::warn!(error = %err, "update failed");
 	let (msg, title) = describe(err);
 	show_message(parent, &msg, &title, MessageDialogStyle::IconError);
 }

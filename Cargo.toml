@@ -19,6 +19,7 @@ minisign-verify = "0.3.0"
 patois = "0.3.3"
 pulldown-cmark = { version = "0.13.6", default-features = false }
 serde = { version = "1.0.229", default-features = false, features = ["derive"] }
+tracing = { version = "0.1.44", default-features = false, features = ["std"] }
 ureq = { version = "3.5.2", default-features = false, features = ["json", "rustls"] }
 wx-utils = "0.5.3"
 wxdragon = { version = "0.9.25", default-features = false }

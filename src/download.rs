@@ -3,7 +3,7 @@ use std::{
 	io::{Read, Write},
 	path::PathBuf,
 	sync::atomic::{AtomicBool, Ordering},
-	time::Duration,
+	time::{Duration, Instant},
 };
 
 use minisign_verify::{PublicKey, Signature};
@@ -13,6 +13,8 @@ use crate::{UpdateError, UpdaterConfig, http, platform};
 
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_mins(10);
 const CHUNK_SIZE: usize = 8192;
+/// Often enough to tell a slow download from a stuck one, rarely enough to keep the log short.
+const LOG_EVERY: u64 = 4 * 1024 * 1024;
 
 /// A partially downloaded or unverified file that is deleted when dropped.
 struct TempDownload(PathBuf);
@@ -52,6 +54,8 @@ pub fn download_update_file(
 ) -> Result<PathBuf, UpdateError> {
 	let public_key = PublicKey::from_base64(&config.minisign_public_key)
 		.map_err(|e| UpdateError::Verification(format!("{}: {e}", t("Invalid public key"))))?;
+	let started = Instant::now();
+	tracing::info!(url, "downloading update");
 	let http = http::agent(DOWNLOAD_TIMEOUT);
 	let signature_text = http
 		.get(signature_url)
@@ -70,6 +74,7 @@ pub fn download_update_file(
 		.and_then(|v| v.to_str().ok())
 		.and_then(|v| v.parse::<u64>().ok())
 		.unwrap_or(0);
+	tracing::info!(total_size, elapsed_ms = started.elapsed().as_millis(), "update download started");
 	let file_name = url.rsplit('/').next().unwrap_or("update.bin");
 	let download_dir = platform::download_dir(config)?;
 	#[cfg(target_os = "macos")]
@@ -94,10 +99,15 @@ pub fn download_update_file(
 			break;
 		}
 		file.write_all(&buffer[..n]).map_err(|e| UpdateError::Io(format!("{}: {e}", t("Failed to write file"))))?;
+		let before = downloaded;
 		downloaded += n as u64;
+		if downloaded / LOG_EVERY > before / LOG_EVERY {
+			tracing::debug!(downloaded, total_size, elapsed_ms = started.elapsed().as_millis(), "update downloading");
+		}
 		progress_callback(downloaded, total_size);
 	}
 	drop(file);
+	tracing::info!(downloaded, elapsed_ms = started.elapsed().as_millis(), "update downloaded, verifying it");
 	let data = fs::read(&temp.0)
 		.map_err(|e| UpdateError::Io(format!("{}: {e}", t("Failed to read file for verification"))))?;
 	public_key
@@ -107,9 +117,15 @@ pub fn download_update_file(
 		.map_err(|e| UpdateError::Io(format!("{}: {e}", t("Failed to rename verified file"))))?;
 	#[cfg(target_os = "macos")]
 	let _ = private_dir.keep();
+	tracing::info!(elapsed_ms = started.elapsed().as_millis(), "update verified");
 	Ok(final_path)
 }
 
 fn check_cancelled(cancelled: &AtomicBool) -> Result<(), UpdateError> {
-	if cancelled.load(Ordering::Relaxed) { Err(UpdateError::Cancelled) } else { Ok(()) }
+	if cancelled.load(Ordering::Relaxed) {
+		tracing::info!("update download cancelled");
+		Err(UpdateError::Cancelled)
+	} else {
+		Ok(())
+	}
 }

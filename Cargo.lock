@@ -1193,6 +1193,7 @@ dependencies = [
  "pulldown-cmark",
  "serde",
  "tempfile",
+ "tracing",
  "ureq",
  "windows",
  "wx-utils",
