@@ -343,7 +343,10 @@ fn describe(err: &UpdateError) -> (String, String) {
 			);
 		}
 		UpdateError::Http(code) => t("The update server returned HTTP error %s.").replace("%s", &code.to_string()),
-		UpdateError::Network(detail) => t("Could not reach the update server: %s").replace("%s", detail),
+		// The detail, such as a Windows socket error, is in the log, and says nothing to the user that this does not.
+		UpdateError::Network(_) => {
+			t("Could not reach the update server. Check your internet connection and try again.")
+		}
 		UpdateError::Cancelled => t("Update cancelled."),
 		UpdateError::InvalidVersion(detail)
 		| UpdateError::InvalidResponse(detail)
@@ -379,5 +382,11 @@ mod tests {
 			("The update server returned HTTP error 404.".into(), "Error".into())
 		);
 		assert_eq!(describe(&UpdateError::NoDownload("No asset.".into())).0, "No asset.");
+	}
+
+	#[test]
+	fn an_unreachable_server_says_to_check_the_connection_without_the_socket_error() {
+		let (msg, _) = describe(&UpdateError::Network("io: No such host is known. (os error 11001)".into()));
+		assert_eq!(msg, "Could not reach the update server. Check your internet connection and try again.");
 	}
 }
