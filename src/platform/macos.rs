@@ -59,20 +59,24 @@ pub fn install_with_cancel(
 	check_cancelled(cancelled)?;
 	let current = env::current_exe().map_err(|e| e.to_string())?;
 	let Some(bundle) = bundle_for_executable(&current) else {
-		return manual_install(config, path);
+		return manual_install(config, path, "the app is not running from a bundle");
 	};
 	if !can_update(&bundle) {
-		return manual_install(config, path);
+		return manual_install(config, path, "the bundle is translocated, a symlink, or not writable");
 	}
 	let Some(parent) = bundle.parent() else {
-		return manual_install(config, path);
+		return manual_install(config, path, "the bundle has no parent directory");
+	};
+	let Some(team) = signing_team(&bundle) else {
+		return manual_install(config, path, "the bundle has no Apple developer team");
 	};
 	// A bundle that no longer verifies, e.g. one modified after install, can still be replaced by hand.
-	let Some(team) = signing_team(&bundle).filter(|team| validate_bundle(&bundle, team).is_ok()) else {
-		return manual_install(config, path);
-	};
-	let Ok(stage) = tempfile::Builder::new().prefix(".ship-shape-").tempdir_in(parent) else {
-		return manual_install(config, path);
+	if let Err(error) = validate_bundle(&bundle, &team) {
+		return manual_install(config, path, &error);
+	}
+	let stage = match tempfile::Builder::new().prefix(".ship-shape-").tempdir_in(parent) {
+		Ok(stage) => stage,
+		Err(error) => return manual_install(config, path, &format!("the staging directory failed: {error}")),
 	};
 	register_stage(stage.path(), &bundle)?;
 	sweep_stale_stages(parent, &bundle, stage.path().metadata().map_err(|e| e.to_string())?.uid(), SystemTime::now());
@@ -169,7 +173,8 @@ fn bundle_stamp(bundle: &Path) -> Result<String, String> {
 	Ok(format!("{}:{}", metadata.dev(), metadata.ino()))
 }
 
-fn manual_install(config: &UpdaterConfig, path: &Path) -> Result<InstallOutcome, String> {
+fn manual_install(config: &UpdaterConfig, path: &Path, reason: &str) -> Result<InstallOutcome, String> {
+	tracing::warn!(reason, exe = %env::current_exe().unwrap_or_default().display(), "can't update in place, so the disk image is opened for a manual install");
 	run(Command::new("/usr/bin/open").arg(path), &t("Failed to open disk image"))?;
 	Ok(InstallOutcome::ManualStep(
 		t("The update has been downloaded and its disk image opened. Quit %s and drag the new version into Applications to finish installing.")
