@@ -267,7 +267,7 @@ fn prepare(
 	let result = platform::install_with_cancel(config, &path, progress.cancel_flag());
 	// A manual fallback still needs its DMG. Automatic preparation has copied the bundle, so its
 	// private verified download can be removed.
-	if !matches!(result, Ok(InstallOutcome::ManualStep(_))) {
+	if !matches!(result, Ok(InstallOutcome::OpenAndQuit { .. })) {
 		platform::remove_private_download(&path);
 	}
 	Ok(result)
@@ -284,6 +284,14 @@ fn install_update(parent: ParentWindow, outcome: Result<InstallOutcome, String>,
 			Ok(()) => quit_for_install(on_exit),
 			Err(msg) => show_message(parent, &msg, &t("Error"), MessageDialogStyle::IconError),
 		},
+		#[cfg(target_os = "macos")]
+		Ok(InstallOutcome::OpenAndQuit { message, image }) => {
+			show_message(parent, &message, &t("Update Ready"), MessageDialogStyle::IconInformation);
+			match platform::open_disk_image(&image) {
+				Ok(()) => quit_for_install(on_exit),
+				Err(msg) => show_message(parent, &msg, &t("Error"), MessageDialogStyle::IconError),
+			}
+		}
 		Ok(InstallOutcome::ManualStep(msg)) => {
 			show_message(parent, &msg, &t("Update Ready"), MessageDialogStyle::IconInformation);
 		}

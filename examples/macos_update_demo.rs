@@ -17,7 +17,7 @@ use ship_shape::{InstallKind, UpdateError, UpdaterConfig};
 #[cfg(target_os = "macos")]
 enum InstallOutcome {
 	Prepared(macos::PreparedUpdate),
-	ManualStep(String),
+	OpenAndQuit { message: String, image: std::path::PathBuf },
 }
 
 #[cfg(target_os = "macos")]
@@ -67,7 +67,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 					update.commit()?;
 					println!("Helper ready. Exiting so it can replace this disposable bundle.");
 				}
-				InstallOutcome::ManualStep(message) => println!("{message}"),
+				InstallOutcome::OpenAndQuit { message, image } => {
+					println!("{message}");
+					macos::open_disk_image(&image)?;
+				}
 			}
 			return Ok(());
 		}

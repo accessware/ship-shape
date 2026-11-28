@@ -14,7 +14,9 @@ mod windows;
 pub use linux::{asset_name_parts, download_dir, install};
 #[cfg(target_os = "macos")]
 #[allow(unused_imports, reason = "macOS UI uses cancellable preparation")]
-pub use macos::{asset_name_parts, download_dir, install, install_with_cancel, remove_private_download};
+pub use macos::{
+	asset_name_parts, download_dir, install, install_with_cancel, open_disk_image, remove_private_download,
+};
 #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
 pub use other::{asset_name_parts, download_dir, install};
 #[cfg(target_os = "windows")]
@@ -30,4 +32,7 @@ pub enum InstallOutcome {
 	Exit,
 	/// The user must finish the install by hand. Holds the instructions to show.
 	ManualStep(String),
+	/// Show `message`, then open `image` and quit, so the user can drag the new bundle in.
+	#[cfg(target_os = "macos")]
+	OpenAndQuit { message: String, image: std::path::PathBuf },
 }
